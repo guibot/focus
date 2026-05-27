@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>focus</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #111111;
+    --bg2:       #171717;
+    --bg3:       #1d1d1d;
+    --bg4:       #252525;
+    --border:    #282828;
+    --text:      #d8d8d8;
+    --text2:     #a0a0a0;
+    --text3:     #888888;
+    --accent:    #d4ff4e;
+    --accent2:   #4effd4;
+    --sel-bg:    #1a2810;
+    --sel-fg:    #d4ff4e;
+    --blue:      #4e9fff;
+    --red:       #ff6b4e;
+    --green:     #4eff91;
+    --font-ui:   'DM Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html, body {
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: var(--font-ui); font-size: 13px;
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  /* ── topbar ── */
+  .topbar {
+    display: flex; align-items: center; gap: 10px;
+    height: 44px; padding: 0 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0; background: var(--bg);
+    z-index: 10;
+  }
+  .topbar-title {
+    font-size: 20px; font-weight: 600;
+    color: var(--accent); letter-spacing: -0.5px;
+    margin-right: auto;
+  }
+  .topbar-ctx {
+    font-size: 11px; color: var(--text3);
+    font-family: var(--font-mono);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 40vw; display: none;
+  }
+  .lock-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 15px; padding: 4px 6px; border-radius: 4px;
+    line-height: 1; opacity: 0.4; flex-shrink: 0;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .lock-btn:hover { opacity: 0.75; background: var(--bg4); }
+  .lock-btn.unlocked { opacity: 1; }
+
+  /* ── body ── */
+  .body { display: flex; flex: 1; overflow: hidden; }
+
+  .col-label {
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text3); user-select: none;
+  }
+
+  /* ── col 1: projects ── */
+  .col-projects {
+    width: 210px; flex-shrink: 0;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .col-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 10px 6px 14px; flex-shrink: 0;
+  }
+  .refresh-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text3); font-size: 15px; padding: 2px 5px;
+    border-radius: 4px; line-height: 1;
+    transition: color 0.15s, background 0.15s;
+  }
+  .refresh-btn:hover { color: var(--text); background: var(--bg4); }
+
+  .project-list { flex: 1; overflow-y: auto; }
+  .project-list::-webkit-scrollbar { width: 3px; }
+  .project-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .proj-item {
+    display: flex; align-items: center; gap: 4px;
+    padding: 8px 8px 8px 14px;
+    font-size: 13px; font-weight: 600; color: var(--text2);
+    cursor: pointer; white-space: nowrap; overflow: hidden;
+    transition: color 0.12s, background 0.12s;
+  }
+  .proj-item:hover { color: var(--text); background: var(--bg3); }
+  .proj-item.active { color: var(--sel-fg); background: var(--sel-bg); }
+  .proj-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── delete buttons (only visible when unlocked) ── */
+  .del-btn {
+    background: none; border: none; cursor: pointer;
+    color: transparent; font-size: 11px; padding: 2px 5px;
+    border-radius: 3px; line-height: 1; flex-shrink: 0;
+    transition: color 0.15s, background 0.15s;
+    pointer-events: none;
+  }
+  .unlocked-mode .del-btn { color: var(--text3); pointer-events: all; }
+  .unlocked-mode .del-btn:hover { color: var(--red); background: var(--bg4); }
+
+  /* ── drag reorder ── */
+  .proj-item[draggable], .task-row[draggable], .subtask-row[draggable] { cursor: grab; }
+  .dragging { opacity: 0.3; }
+  .drag-target { box-shadow: inset 0 2px 0 var(--accent); }
+
+  /* ── add rows ── */
+  .add-row {
+    display: none; padding: 8px 10px; gap: 6px;
+    flex-shrink: 0; align-items: center;
+  }
+  .add-row.visible { display: flex; }
+  .add-input {
+    flex: 1; background: var(--bg4); border: 1px solid var(--border);
+    border-radius: 4px; padding: 5px 8px;
+    font-family: var(--font-ui); font-size: 12px; color: var(--text);
+    outline: none; transition: border-color 0.15s; min-width: 0;
+  }
+  .add-input:focus { border-color: var(--accent); }
+  .add-input::placeholder { color: var(--text3); }
+  .add-input:disabled { opacity: 0.35; cursor: not-allowed; }
+  .add-btn {
+    background: var(--accent); border: none; border-radius: 4px;
+    padding: 5px 10px; cursor: pointer; flex-shrink: 0;
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+    color: var(--bg); line-height: 1; transition: opacity 0.15s;
+  }
+  .add-btn:hover { opacity: 0.85; }
+  .add-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* two add rows side by side */
+  .add-row-group {
+    display: none; flex-shrink: 0;
+    border-top: 1px solid var(--border);
+  }
+  .add-row-group.visible { display: flex; }
+  .add-row-group .add-row {
+    flex: 1; display: flex; border-top: none;
+  }
+  .add-row-group .add-row + .add-row {
+    border-left: 1px solid var(--border);
+  }
+
+  /* bottom border for col-1 add row */
+  .col-projects .add-row { border-top: 1px solid var(--border); }
+
+  /* ── col 2: main ── */
+  .col-main {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bg); border-right: 1px solid var(--border);
+  }
+
+  .proj-header-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 13px 18px 10px; flex-shrink: 0;
+    border-bottom: 1px solid var(--border); min-height: 46px;
+  }
+  .proj-header-title {
+    flex: 1; font-size: 15px; font-weight: 600; color: var(--accent2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    cursor: pointer; border-radius: 3px; padding: 1px 4px; margin-left: -4px;
+    transition: background 0.15s;
+  }
+  .proj-header-title:hover { background: var(--bg3); }
+  .proj-header-title.active { background: var(--sel-bg); color: var(--sel-fg); }
+  .proj-header-empty {
+    flex: 1; font-size: 12px; color: var(--text3);
+    font-family: var(--font-mono);
+  }
+
+  /* ── status dots ── */
+  .s-dots { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+  .s-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1.5px solid; cursor: pointer; flex-shrink: 0;
+    opacity: 0.3; transition: opacity 0.15s, background 0.12s;
+  }
+  .s-dot:hover { opacity: 0.65; }
+  .s-dot.active { opacity: 1; }
+  .s-dot.brainstorm        { border-color: var(--blue); }
+  .s-dot.developing        { border-color: var(--red); }
+  .s-dot.released          { border-color: var(--green); }
+  .s-dot.active.brainstorm { background: var(--blue); }
+  .s-dot.active.developing { background: var(--red); }
+  .s-dot.active.released   { background: var(--green); }
+
+  /* ── task list ── */
+  .task-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .task-list::-webkit-scrollbar { width: 3px; }
+  .task-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .task-row, .subtask-row {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; transition: background 0.12s;
+  }
+  .task-row    { padding: 7px 14px 7px 18px; }
+  .subtask-row { padding: 5px 14px 5px 36px; }
+  .task-row:hover, .subtask-row:hover { background: var(--bg3); }
+  .task-row.active, .subtask-row.active { background: var(--sel-bg); }
+
+  .task-name, .subtask-name {
+    flex: 1; color: var(--text2);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .task-name   { font-size: 13px; }
+  .subtask-name { font-size: 12px; color: var(--text3); }
+  .task-row.active .task-name,
+  .subtask-row.active .subtask-name { color: var(--sel-fg); }
+
+  .subtask-prefix {
+    font-size: 10px; color: var(--text3); flex-shrink: 0;
+    opacity: 0.5;
+  }
+
+  .task-empty {
+    padding: 20px 18px; font-size: 12px;
+    color: var(--text3); font-family: var(--font-mono);
+  }
+
+  /* ── resizer ── */
+  .resizer {
+    width: 4px; flex-shrink: 0; cursor: col-resize;
+    background: var(--border);
+    transition: background 0.15s;
+  }
+  .resizer:hover, .resizer.dragging { background: var(--accent); }
+  @media (max-width: 768px) { .resizer { display: none; } }
+
+  /* ── col 3: notes ── */
+  .col-notes {
+    width: 600px; flex-shrink: 0; background: var(--bg3);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .notes-header {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 10px 14px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .notes-header-top { display: flex; align-items: center; justify-content: space-between; }
+  .notes-ctx {
+    font-size: 12px; font-weight: 600; color: var(--text2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .notes-ctx.empty { display: none; }
+  .save-indicator { font-size: 11px; color: var(--text3); }
+  .save-indicator.dirty { color: var(--accent); }
+
+  .notes-area { flex: 1; overflow-y: auto; padding: 12px 14px; }
+  .notes-area::-webkit-scrollbar { width: 3px; }
+  .notes-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  #notes-editor {
+    width: 100%; height: 100%; min-height: 400px;
+    background: transparent; border: none; outline: none; resize: none;
+    font-family: var(--font-ui); font-size: 13px; line-height: 1.7;
+    color: var(--text); caret-color: var(--accent);
+    display: none;
+  }
+  .unlocked-mode #notes-editor { display: block; }
+  .unlocked-mode #notes-preview { display: none; }
+  #notes-editor::placeholder { color: var(--text3); }
+  #notes-preview {
+    width: 100%; display: block;
+    font-family: var(--font-ui); font-size: 13px; line-height: 1.7; color: var(--text);
+  }
+
+  /* todo items in notes preview */
+  .todo-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 2px 0; cursor: pointer; user-select: none;
+  }
+  .todo-box {
+    width: 13px; height: 13px; flex-shrink: 0;
+    border: 1px solid var(--text3); border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: var(--bg); transition: background 0.1s, border-color 0.1s;
+  }
+  .todo-item.checked .todo-box { background: var(--accent); border-color: var(--accent); }
+  .todo-item.checked .todo-label { color: var(--text3); text-decoration: line-through; }
+  .todo-text { color: var(--text2); }
+  .todo-spacer { height: 5px; }
+
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .hint { color: var(--text3); padding: 16px 14px; font-size: 12px; font-family: var(--font-mono); }
+
+  /* ── mobile tab bar ── */
+  .tab-bar { display: none; }
+
+  /* ── responsive: mobile ≤768px ── */
+  @media (max-width: 768px) {
+    .app { height: 100dvh; }
+    .topbar-ctx { display: block; }
+
+    .tab-bar {
+      display: flex; flex-shrink: 0;
+      height: 52px;
+      background: var(--bg2); border-top: 1px solid var(--border);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .tab-btn {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 2px;
+      background: none; border: none; cursor: pointer;
+      font-family: var(--font-ui); font-size: 10px; font-weight: 500;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text3); transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+    }
+    .tab-btn .tab-icon { font-size: 18px; line-height: 1; }
+    .tab-btn.active { color: var(--accent); }
+
+    .col-projects, .col-main, .col-notes {
+      display: none !important;
+      width: 100% !important; flex: 1 !important;
+      border-right: none !important;
+    }
+    .col-projects.tab-active,
+    .col-main.tab-active,
+    .col-notes.tab-active { display: flex !important; }
+
+    /* bigger tap targets */
+    .proj-item    { padding: 12px 8px 12px 14px; }
+    .task-row     { padding: 10px 14px 10px 18px; }
+    .subtask-row  { padding: 8px 14px 8px 36px; }
+    .s-dot        { width: 12px; height: 12px; }
+
+    /* add row group stacks on small screens */
+    .add-row-group { flex-direction: column; }
+    .add-row-group .add-row + .add-row { border-left: none; border-top: 1px solid var(--border); }
+
+    .col-notes { width: 100% !important; }
+    #notes-editor { min-height: 200px; }
+  }
+
+  /* ── responsive: tablet 769–1024px ── */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .col-projects { width: 180px; }
+    .col-notes    { width: 240px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <div class="topbar">
+    <span class="topbar-title">focus</span>
+    <span class="topbar-ctx" id="topbar-ctx"></span>
+    <button class="lock-btn" id="lock-btn" title="Toggle edit mode" onclick="toggleUnlock()">🔒</button>
+  </div>
+
+  <div class="body">
+
+    <!-- col 1: projects -->
+    <div class="col-projects" id="panel-projects">
+      <div class="col-header">
+        <span class="col-label">projects</span>
+        <button class="refresh-btn" title="Refresh" onclick="refreshProjects()">↺</button>
+      </div>
+      <div class="project-list" id="project-list">
+        <div class="hint">loading…</div>
+      </div>
+      <div class="add-row" id="new-project-row">
+        <input class="add-input" id="new-project-input" placeholder="project name…" maxlength="80"
+               onkeydown="if(event.key==='Enter')addProject()">
+        <button class="add-btn" id="new-project-add" onclick="addProject()">+</button>
+      </div>
+    </div>
+
+    <!-- col 2: project + tasks -->
+    <div class="col-main" id="panel-main">
+      <div class="proj-header-row">
+        <span class="proj-header-empty" id="proj-header-empty">select a project</span>
+        <span class="proj-header-title" id="proj-header-title" style="display:none" onclick="selectProjectLevel()"></span>
+        <div class="s-dots" id="proj-status-dots" style="display:none">
+          <span class="s-dot brainstorm" data-status="brainstorm" onclick="setProjectStatus('brainstorm')" title="brainstorm"></span>
+          <span class="s-dot developing" data-status="developing" onclick="setProjectStatus('developing')" title="developing"></span>
+          <span class="s-dot released"   data-status="released"   onclick="setProjectStatus('released')"  title="released"></span>
+        </div>
+        <button class="del-btn" id="proj-del-btn" onclick="deleteCurrentProject()" title="Delete project">✕</button>
+      </div>
+      <div class="task-list" id="task-list"></div>
+      <div class="add-row-group" id="add-row-group">
+        <div class="add-row" id="new-task-row">
+          <input class="add-input" id="new-task-input" placeholder="new task…" maxlength="200"
+                 onkeydown="if(event.key==='Enter')addTask()">
+          <button class="add-btn" id="new-task-add" onclick="addTask()">+</button>
+        </div>
+        <div class="add-row" id="new-subtask-row">
+          <input class="add-input" id="new-subtask-input" placeholder="new sub-task…" maxlength="200"
+                 onkeydown="if(event.key==='Enter')addSubtask()" disabled>
+          <button class="add-btn" id="new-subtask-add" onclick="addSubtask()" disabled>+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- resizer -->
+    <div class="resizer" id="resizer"></div>
+
+    <!-- col 3: notes -->
+    <div class="col-notes" id="panel-notes">
+      <div class="notes-header">
+        <div class="notes-header-top">
+          <span class="col-label">notes</span>
+          <span class="save-indicator" id="save-indicator"></span>
+        </div>
+        <span class="notes-ctx empty" id="notes-ctx"></span>
+      </div>
+      <div class="notes-area">
+        <textarea id="notes-editor" placeholder="notes…" spellcheck="false"></textarea>
+        <div id="notes-preview"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- mobile tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-projects" onclick="switchTab('projects')">
+      <span class="tab-icon">◫</span>Projects
+    </button>
+    <button class="tab-btn" id="tab-main" onclick="switchTab('main')">
+      <span class="tab-icon">☰</span>Tasks
+    </button>
+    <button class="tab-btn" id="tab-notes" onclick="switchTab('notes')">
+      <span class="tab-icon">✎</span>Notes
+    </button>
+  </div>
+
+</div>
+<script>
+// ── state ──────────────────────────────────────────────────────────────────
+let projects       = []
+let selectedPath   = null
+let selectedTaskId = null   // task id or null (project-level)
+let selectedSubId  = null   // subtask id or null
+let tasks          = []     // [{id, title, status, notes, subtasks:[{id,title,status,notes}]}]
+let projectStatus  = null
+let projectNotes   = ''
+let projectOrder   = []     // persisted order of project names
+let dragInfo       = null   // {type, idx} | {type:'subtask', taskId, idx}
+const LOCK_ENABLED = false   // set true to re-enable lock/unlock button
+let unlocked       = !LOCK_ENABLED
+let saveTimer      = null
+let notesDirty     = false
+let activeTab      = 'projects'
+
+// ── mobile tabs ────────────────────────────────────────────────────────────
+function isMobile() { return window.matchMedia('(max-width: 768px)').matches }
+
+function switchTab(tab) {
+  activeTab = tab
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+  document.getElementById('tab-' + tab).classList.add('active')
+  document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.remove('tab-active'))
+  document.getElementById('panel-' + tab).classList.add('tab-active')
+}
+
+// ── init ───────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  if (!LOCK_ENABLED) {
+    document.getElementById('lock-btn').style.display = 'none'
+    document.getElementById('app').classList.add('unlocked-mode')
+    document.getElementById('new-project-row').classList.add('visible')
+  }
+  if (isMobile()) switchTab('projects')
+  const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}))
+  projectOrder = cfg.projectOrder || []
+  await loadProjects(cfg.sel || null)
+})
+
+function applyProjectOrder() {
+  if (!projectOrder.length) return
+  projects.sort((a, b) => {
+    const ai = projectOrder.indexOf(a.name)
+    const bi = projectOrder.indexOf(b.name)
+    if (ai === -1 && bi === -1) return a.name.localeCompare(b.name)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+}
+
+async function loadProjects(savedPath) {
+  projects = await fetch('/api/projects').then(r => r.json())
+  applyProjectOrder()
+  renderTree()
+  const found = savedPath && projects.find(p => p.path === savedPath)
+  if (found) await selectPath(savedPath)
+  else if (projects.length) await selectPath(projects[0].path)
+}
+
+// ── tree ───────────────────────────────────────────────────────────────────
+function renderTree() {
+  const list = document.getElementById('project-list')
+  list.innerHTML = ''
+  if (!projects.length) {
+    list.innerHTML = '<div class="hint">no projects yet</div>'
+    return
+  }
+  for (let i = 0; i < projects.length; i++) {
+    const proj = projects[i]
+    const el  = document.createElement('div')
+    el.className = 'proj-item' + (proj.path === selectedPath ? ' active' : '')
+    el.dataset.path = proj.path
+
+    const name = document.createElement('span')
+    name.className = 'proj-item-name'
+    name.textContent = proj.name
+
+    const del = document.createElement('button')
+    del.className = 'del-btn'
+    del.textContent = '✕'
+    del.title = 'Delete project'
+    del.setAttribute('draggable', 'false')
+    del.onclick = e => { e.stopPropagation(); deleteProjectByPath(proj.path, proj.name) }
+
+    el.appendChild(name)
+    el.appendChild(del)
+    el.addEventListener('click', () => selectPath(proj.path))
+    addDrag(el, {type:'project', idx:i}, reorderProjects)
+    list.appendChild(el)
+  }
+}
+
+async function refreshProjects() {
+  projects = await fetch('/api/projects').then(r => r.json())
+  applyProjectOrder()
+  renderTree()
+}
+
+// ── unlock (merged: edit mode + notes preview) ─────────────────────────────
+function toggleUnlock() {
+  unlocked = !unlocked
+  document.getElementById('app').classList.toggle('unlocked-mode', unlocked)
+  const btn = document.getElementById('lock-btn')
+  btn.textContent = unlocked ? '🔓' : '🔒'
+  btn.classList.toggle('unlocked', unlocked)
+
+  // add-rows visibility
+  document.getElementById('new-project-row').classList.toggle('visible', unlocked)
+  const hasProj = !!selectedPath
+  document.getElementById('add-row-group').classList.toggle('visible', unlocked && hasProj)
+
+  // notes: unlocked=editor, locked=preview
+  const editor  = document.getElementById('notes-editor')
+  const preview = document.getElementById('notes-preview')
+  if (unlocked) {
+    editor.style.display  = 'block'
+    preview.style.display = 'none'
+  } else {
+    renderNotesPreview(editor.value)
+    editor.style.display  = 'none'
+    preview.style.display = 'block'
+  }
+
+  if (unlocked) document.getElementById('new-project-input').value = ''
+  updateSubtaskInput()
+}
+
+// ── select project ─────────────────────────────────────────────────────────
+async function selectPath(p) {
+  if (selectedPath && selectedPath !== p) await flushNotes()
+  selectedPath   = p
+  selectedTaskId = null
+  selectedSubId  = null
+  renderTree()
+  await loadData()
+  loadNotes()
+  document.getElementById('add-row-group').classList.toggle('visible', unlocked && !!selectedPath)
+  updateSubtaskInput()
+  updateTopbarCtx()
+  updateHeaderActive()
+  fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sel: p, projectOrder }) })
+  if (isMobile()) switchTab('main')
+}
+
+// ── select task / subtask ──────────────────────────────────────────────────
+async function selectProjectLevel() {
+  if (!selectedPath) return
+  await flushNotes()
+  selectedTaskId = null
+  selectedSubId  = null
+  renderTasks()
+  loadNotes()
+  updateSubtaskInput()
+  updateTopbarCtx()
+  updateHeaderActive()
+}
+
+async function selectTask(id) {
+  await flushNotes()
+  selectedTaskId = id
+  selectedSubId  = null
+  renderTasks()
+  loadNotes()
+  updateSubtaskInput()
+  updateTopbarCtx()
+  updateHeaderActive()
+}
+
+async function selectSubtask(taskId, subId) {
+  await flushNotes()
+  selectedTaskId = taskId
+  selectedSubId  = subId
+  renderTasks()
+  loadNotes()
+  updateSubtaskInput()
+  updateTopbarCtx()
+  updateHeaderActive()
+}
+
+function updateSubtaskInput() {
+  const canSub = !!selectedTaskId && !selectedSubId
+  const input  = document.getElementById('new-subtask-input')
+  const btn    = document.getElementById('new-subtask-add')
+  input.disabled = !canSub
+  btn.disabled   = !canSub
+  input.placeholder = canSub ? 'new sub-task…' : 'select a task first'
+}
+
+function updateHeaderActive() {
+  const title = document.getElementById('proj-header-title')
+  if (title) title.classList.toggle('active', !selectedTaskId && !selectedSubId && !!selectedPath)
+}
+
+function updateTopbarCtx() {
+  const ctx = document.getElementById('topbar-ctx')
+  if (!selectedPath) { ctx.textContent = ''; return }
+  const proj = projects.find(p => p.path === selectedPath)
+  if (selectedSubId) {
+    const task = tasks.find(t => t.id === selectedTaskId)
+    const sub  = task && task.subtasks && task.subtasks.find(s => s.id === selectedSubId)
+    ctx.textContent = sub ? sub.title : ''
+  } else if (selectedTaskId) {
+    const task = tasks.find(t => t.id === selectedTaskId)
+    ctx.textContent = task ? task.title : ''
+  } else {
+    ctx.textContent = proj ? proj.name : ''
+  }
+}
+
+// ── data ───────────────────────────────────────────────────────────────────
+async function loadData() {
+  if (!selectedPath) return
+  const proj = projects.find(p => p.path === selectedPath)
+
+  document.getElementById('proj-header-empty').style.display = 'none'
+  document.getElementById('proj-header-title').style.display = 'block'
+  document.getElementById('proj-header-title').textContent = proj ? proj.name : '—'
+  document.getElementById('proj-status-dots').style.display = 'flex'
+
+  const data = await fetch('/api/data?path=' + encodeURIComponent(selectedPath)).then(r => r.json())
+  projectStatus = data.status || null
+  projectNotes  = data.notes  || ''
+  tasks = (data.tasks || []).map(t => ({
+    ...t,
+    notes: t.notes || '',
+    subtasks: (t.subtasks || []).map(s => ({ ...s, notes: s.notes || '' }))
+  }))
+
+  updateProjDots()
+  renderTasks()
+}
+
+function updateProjDots() {
+  document.querySelectorAll('#proj-status-dots .s-dot').forEach(d => {
+    d.classList.toggle('active', d.dataset.status === projectStatus)
+  })
+}
+
+function makeDots(status, onClickFn) {
+  const wrap = document.createElement('div')
+  wrap.className = 's-dots'
+  for (const s of ['brainstorm', 'developing', 'released']) {
+    const dot = document.createElement('span')
+    dot.className = 's-dot ' + s + (status === s ? ' active' : '')
+    dot.title = s
+    dot.onclick = e => { e.stopPropagation(); onClickFn(s) }
+    wrap.appendChild(dot)
+  }
+  return wrap
+}
+
+function makeDelBtn(onClickFn, title) {
+  const btn = document.createElement('button')
+  btn.className = 'del-btn'
+  btn.textContent = '✕'
+  btn.title = title
+  btn.onclick = e => { e.stopPropagation(); onClickFn() }
+  return btn
+}
+
+function renderTasks() {
+  const list = document.getElementById('task-list')
+  list.innerHTML = ''
+  if (!tasks.length) {
+    const e = document.createElement('div')
+    e.className = 'task-empty'
+    e.textContent = selectedPath ? 'no tasks yet.' : ''
+    list.appendChild(e)
+    return
+  }
+
+  for (let ti = 0; ti < tasks.length; ti++) {
+    const task = tasks[ti]
+    // ── task row
+    const row = document.createElement('div')
+    row.className = 'task-row' + (task.id === selectedTaskId && !selectedSubId ? ' active' : '')
+    row.dataset.taskId = task.id
+
+    const name = document.createElement('span')
+    name.className = 'task-name'
+    name.textContent = task.title
+
+    row.appendChild(name)
+    row.appendChild(makeDots(task.status, s => setTaskStatus(task.id, s)))
+    row.appendChild(makeDelBtn(() => deleteTask(task.id, task.title), 'Delete task'))
+    row.addEventListener('click', () => selectTask(task.id))
+    addDrag(row, {type:'task', idx:ti}, reorderTasks)
+    list.appendChild(row)
+
+    // ── subtask rows
+    for (let si = 0; si < (task.subtasks || []).length; si++) {
+      const sub = task.subtasks[si]
+      const srow = document.createElement('div')
+      srow.className = 'subtask-row' + (sub.id === selectedSubId ? ' active' : '')
+      srow.dataset.subId = sub.id
+
+      const prefix = document.createElement('span')
+      prefix.className = 'subtask-prefix'
+      prefix.textContent = '↳'
+
+      const sname = document.createElement('span')
+      sname.className = 'subtask-name'
+      sname.textContent = sub.title
+
+      srow.appendChild(prefix)
+      srow.appendChild(sname)
+      srow.appendChild(makeDots(sub.status, s => setSubtaskStatus(task.id, sub.id, s)))
+      srow.appendChild(makeDelBtn(() => deleteSubtask(task.id, sub.id, sub.title), 'Delete sub-task'))
+      srow.addEventListener('click', () => selectSubtask(task.id, sub.id))
+      addDrag(srow, {type:'subtask', taskId:task.id, idx:si}, reorderSubtasks)
+      list.appendChild(srow)
+    }
+  }
+}
+
+async function saveData() {
+  if (!selectedPath) return
+  await fetch('/api/data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: selectedPath, status: projectStatus, notes: projectNotes, tasks })
+  })
+}
+
+async function setProjectStatus(status) {
+  projectStatus = projectStatus === status ? null : status
+  updateProjDots()
+  await saveData()
+}
+
+async function setTaskStatus(id, status) {
+  const task = tasks.find(t => t.id === id)
+  if (!task) return
+  task.status = task.status === status ? null : status
+  renderTasks()
+  await saveData()
+}
+
+async function setSubtaskStatus(taskId, subId, status) {
+  const task = tasks.find(t => t.id === taskId)
+  const sub  = task && task.subtasks && task.subtasks.find(s => s.id === subId)
+  if (!sub) return
+  sub.status = sub.status === status ? null : status
+  renderTasks()
+  await saveData()
+}
+
+// ── add / delete ───────────────────────────────────────────────────────────
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+}
+
+async function addTask() {
+  const input = document.getElementById('new-task-input')
+  const btn   = document.getElementById('new-task-add')
+  const title = input.value.trim()
+  if (!title) { flashError(input); return }
+  tasks.push({ id: newId(), title, status: null, subtasks: [] })
+  input.value = ''
+  renderTasks()
+  await saveData()
+}
+
+async function addSubtask() {
+  if (!selectedTaskId) return
+  const input = document.getElementById('new-subtask-input')
+  const title = input.value.trim()
+  if (!title) { flashError(input); return }
+  const task = tasks.find(t => t.id === selectedTaskId)
+  if (!task) return
+  if (!task.subtasks) task.subtasks = []
+  task.subtasks.push({ id: newId(), title, status: null })
+  input.value = ''
+  renderTasks()
+  await saveData()
+}
+
+async function deleteTask(id, title) {
+  if (!confirm(`Delete task "${title}"?`)) return
+  tasks = tasks.filter(t => t.id !== id)
+  if (selectedTaskId === id) {
+    selectedTaskId = null; selectedSubId = null
+    loadNotes()
+    updateSubtaskInput()
+    updateTopbarCtx()
+  }
+  renderTasks()
+  await saveData()
+}
+
+async function deleteSubtask(taskId, subId, title) {
+  if (!confirm(`Delete sub-task "${title}"?`)) return
+  const task = tasks.find(t => t.id === taskId)
+  if (!task) return
+  task.subtasks = (task.subtasks || []).filter(s => s.id !== subId)
+  if (selectedSubId === subId) {
+    selectedSubId = null
+    loadNotes()
+    updateSubtaskInput()
+    updateTopbarCtx()
+  }
+  renderTasks()
+  await saveData()
+}
+
+async function addProject() {
+  const input = document.getElementById('new-project-input')
+  const btn   = document.getElementById('new-project-add')
+  const name  = input.value.trim()
+  if (!name) { flashError(input); return }
+  btn.disabled = true; btn.textContent = '…'
+  try {
+    const res = await fetch('/api/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    }).then(r => r.json())
+    if (res.ok) {
+      input.value = ''
+      await refreshProjects()
+      if (res.path) await selectPath(res.path)
+    } else { flashError(input) }
+  } catch (e) { console.error(e); flashError(input) }
+  finally { btn.disabled = false; btn.textContent = '+' }
+}
+
+async function deleteCurrentProject() {
+  if (!selectedPath) return
+  const proj = projects.find(p => p.path === selectedPath)
+  if (proj) await deleteProjectByPath(proj.path, proj.name)
+}
+
+async function deleteProjectByPath(dirPath, name) {
+  if (!confirm(`Delete project "${name}"?`)) return
+  await fetch('/api/project', {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: dirPath })
+  })
+  if (selectedPath === dirPath) {
+    selectedPath = null; selectedTaskId = null; selectedSubId = null
+    tasks = []; projectStatus = null
+    document.getElementById('proj-header-empty').style.display = 'block'
+    document.getElementById('proj-header-title').style.display = 'none'
+    document.getElementById('proj-status-dots').style.display = 'none'
+    document.getElementById('task-list').innerHTML = ''
+    document.getElementById('notes-editor').value = ''
+    document.getElementById('notes-preview').innerHTML = ''
+    document.getElementById('add-row-group').classList.remove('visible')
+    updateTopbarCtx()
+  }
+  await refreshProjects()
+}
+
+// ── notes ──────────────────────────────────────────────────────────────────
+function currentNotes() {
+  if (selectedSubId) {
+    const task = tasks.find(t => t.id === selectedTaskId)
+    const sub  = task && task.subtasks.find(s => s.id === selectedSubId)
+    return sub ? sub.notes || '' : ''
+  }
+  if (selectedTaskId) {
+    const task = tasks.find(t => t.id === selectedTaskId)
+    return task ? task.notes || '' : ''
+  }
+  return projectNotes
+}
+
+function setCurrentNotes(content) {
+  if (selectedSubId) {
+    const task = tasks.find(t => t.id === selectedTaskId)
+    const sub  = task && task.subtasks.find(s => s.id === selectedSubId)
+    if (sub) sub.notes = content
+  } else if (selectedTaskId) {
+    const task = tasks.find(t => t.id === selectedTaskId)
+    if (task) task.notes = content
+  } else {
+    projectNotes = content
+  }
+}
+
+function updateNotesCtx() {
+  const el = document.getElementById('notes-ctx')
+  if (!selectedPath) { el.textContent = ''; el.className = 'notes-ctx empty'; return }
+  const proj = projects.find(p => p.path === selectedPath)
+  let label = proj ? proj.name : ''
+  if (selectedTaskId) {
+    const task = tasks.find(t => t.id === selectedTaskId)
+    if (task) label += '  ›  ' + task.title
+    if (selectedSubId) {
+      const sub = task && task.subtasks.find(s => s.id === selectedSubId)
+      if (sub) label += '  ›  ' + sub.title
+    }
+  }
+  el.textContent = label
+  el.className = 'notes-ctx'
+}
+
+function loadNotes() {
+  const content = selectedPath ? currentNotes() : ''
+  document.getElementById('notes-editor').value = content
+  if (!unlocked) renderNotesPreview(content)
+  notesDirty = false
+  setIndicator('')
+  updateNotesCtx()
+}
+
+document.getElementById('notes-editor').addEventListener('input', () => {
+  notesDirty = true
+  setIndicator('●', true)
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(flushNotes, 1200)
+})
+
+async function flushNotes() {
+  if (!selectedPath || !notesDirty) return
+  const content = document.getElementById('notes-editor').value
+  setCurrentNotes(content)
+  notesDirty = false
+  await saveData()
+  setIndicator('saved')
+}
+
+function renderNotesPreview(content) {
+  const preview = document.getElementById('notes-preview')
+  preview.innerHTML = ''
+  content.split('\n').forEach((line, i) => {
+    const unchecked = line.match(/^\s*\[\] (.+)/)
+    const checked   = line.match(/^\s*\[x\] (.+)/i)
+    if (unchecked || checked) {
+      const isDone = !!checked
+      const item = document.createElement('div')
+      item.className = 'todo-item' + (isDone ? ' checked' : '')
+      item.onclick = () => toggleTodoLine(i, !isDone)
+      const box = document.createElement('span')
+      box.className = 'todo-box'; box.textContent = isDone ? '✓' : ''
+      const label = document.createElement('span')
+      label.className = 'todo-label'; label.textContent = (unchecked || checked)[1]
+      item.appendChild(box); item.appendChild(label)
+      preview.appendChild(item)
+    } else if (line.trim() === '') {
+      const s = document.createElement('div'); s.className = 'todo-spacer'; preview.appendChild(s)
+    } else {
+      const p = document.createElement('div'); p.className = 'todo-text'; p.textContent = line; preview.appendChild(p)
+    }
+  })
+}
+
+async function toggleTodoLine(lineIndex, isChecked) {
+  const editor = document.getElementById('notes-editor')
+  const lines  = editor.value.split('\n')
+  lines[lineIndex] = isChecked
+    ? lines[lineIndex].replace(/^(\s*)\[\] /, '$1[x] ')
+    : lines[lineIndex].replace(/^(\s*)\[x\] /i, '$1[] ')
+  editor.value = lines.join('\n')
+  renderNotesPreview(editor.value)
+  if (selectedPath) {
+    setCurrentNotes(editor.value)
+    await saveData()
+    setIndicator('saved')
+  }
+}
+
+function setIndicator(text, dirty = false) {
+  const el = document.getElementById('save-indicator')
+  el.textContent = text
+  el.className = 'save-indicator' + (dirty ? ' dirty' : '')
+}
+
+function flashError(input) {
+  input.focus()
+  input.style.borderColor = '#ff4e4e'
+  setTimeout(() => { input.style.borderColor = '' }, 1200)
+}
+
+// ── drag reorder ───────────────────────────────────────────────────────────
+function addDrag(el, info, reorderFn) {
+  el.draggable = true
+  el.addEventListener('dragstart', e => {
+    dragInfo = info
+    el.classList.add('dragging')
+    e.dataTransfer.effectAllowed = 'move'
+    e.stopPropagation()
+  })
+  el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragInfo = null })
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-target') })
+  el.addEventListener('dragleave', () => el.classList.remove('drag-target'))
+  el.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation()
+    el.classList.remove('drag-target')
+    if (dragInfo) reorderFn(dragInfo, info)
+  })
+}
+
+async function reorderProjects(from, to) {
+  if (from.type !== 'project' || from.idx === to.idx) return
+  const [item] = projects.splice(from.idx, 1)
+  projects.splice(to.idx, 0, item)
+  projectOrder = projects.map(p => p.name)
+  renderTree()
+  await saveProjectOrder()
+}
+
+async function saveProjectOrder() {
+  await fetch('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sel: selectedPath, projectOrder })
+  })
+}
+
+async function reorderTasks(from, to) {
+  if (from.type !== 'task' || from.idx === to.idx) return
+  const [item] = tasks.splice(from.idx, 1)
+  tasks.splice(to.idx, 0, item)
+  renderTasks()
+  await saveData()
+}
+
+async function reorderSubtasks(from, to) {
+  if (from.type !== 'subtask' || from.taskId !== to.taskId || from.idx === to.idx) return
+  const task = tasks.find(t => t.id === from.taskId)
+  if (!task) return
+  const [item] = task.subtasks.splice(from.idx, 1)
+  task.subtasks.splice(to.idx, 0, item)
+  renderTasks()
+  await saveData()
+}
+
+// ── resizer ────────────────────────────────────────────────────────────────
+;(function () {
+  const resizer   = document.getElementById('resizer')
+  const notesPanel = document.getElementById('panel-notes')
+  const MIN = 180, MAX = 900
+  let dragging = false, startX = 0, startW = 0
+
+  const saved = localStorage.getItem('notesWidth')
+  if (saved) notesPanel.style.width = saved + 'px'
+
+  resizer.addEventListener('mousedown', e => {
+    dragging = true
+    startX   = e.clientX
+    startW   = notesPanel.offsetWidth
+    resizer.classList.add('dragging')
+    document.body.style.cursor     = 'col-resize'
+    document.body.style.userSelect = 'none'
+    e.preventDefault()
+  })
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return
+    const w = Math.max(MIN, Math.min(MAX, startW + (startX - e.clientX)))
+    notesPanel.style.width = w + 'px'
+  })
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return
+    dragging = false
+    resizer.classList.remove('dragging')
+    document.body.style.cursor     = ''
+    document.body.style.userSelect = ''
+    localStorage.setItem('notesWidth', notesPanel.offsetWidth)
+  })
+})()
+</script>
+</body>
+</html>

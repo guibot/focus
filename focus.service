@@ -1,0 +1,14 @@
+[Unit]
+Description=Focus project dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=g
+WorkingDirectory=/home/g/focus
+Environment=PROJECTS_ROOT=/home/g/focus/projects
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

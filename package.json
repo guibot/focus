@@ -1,0 +1,13 @@
+{
+  "name": "focus",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
+}
