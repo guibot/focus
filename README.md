@@ -1,8 +1,8 @@
 # focus
 
-![focus dashboard](focus.webp)
+Simple Clean Minimal Self-Hosted Task Manager
 
-Personal project management dashboard. Three-panel layout: project list → task/subtask manager → notes editor.
+![focus dashboard](focus.webp)
 
 ## Stack
 
