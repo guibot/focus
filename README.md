@@ -1,5 +1,7 @@
 # focus
 
+![focus dashboard](focus.webp)
+
 Personal project management dashboard. Three-panel layout: project list → task/subtask manager → notes editor.
 
 ## Stack
