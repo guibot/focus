@@ -264,7 +264,7 @@
   .save-indicator { font-size: 11px; color: var(--text3); }
   .save-indicator.dirty { color: var(--accent); }
 
-  .notes-area { flex: 1; overflow-y: auto; padding: 12px 14px; }
+  .notes-area { flex: 1; overflow-y: auto; padding: 12px 14px; overscroll-behavior: contain; }
   .notes-area::-webkit-scrollbar { width: 3px; }
   .notes-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -311,10 +311,15 @@
     .topbar-ctx { display: block; }
 
     .tab-bar {
-      display: flex; flex-shrink: 0;
+      display: flex;
+      position: fixed; bottom: 0; left: 0; right: 0;
       height: 52px;
       background: var(--bg2); border-top: 1px solid var(--border);
       padding-bottom: env(safe-area-inset-bottom, 0px);
+      z-index: 100;
+    }
+    .body {
+      padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
     }
     .tab-btn {
       flex: 1; display: flex; flex-direction: column;
@@ -349,6 +354,28 @@
 
     .col-notes { width: 100% !important; }
     #notes-editor { min-height: 200px; }
+  }
+
+  /* ── responsive: medium 540–768px (tasks + notes side-by-side) ── */
+  @media (min-width: 540px) and (max-width: 768px) {
+    .col-main {
+      display: flex !important;
+      flex: 1 !important;
+      width: auto !important;
+    }
+    .col-notes {
+      display: flex !important;
+      flex: 1 !important;
+      width: auto !important;
+    }
+    .col-projects { display: none !important; }
+    .medium-projects-visible .col-projects {
+      display: flex !important;
+      flex: 1 !important;
+      width: 100% !important;
+    }
+    .medium-projects-visible .col-main,
+    .medium-projects-visible .col-notes { display: none !important; }
   }
 
   /* ── responsive: tablet 769–1024px ── */
@@ -465,6 +492,7 @@ let activeTab      = 'projects'
 
 // ── mobile tabs ────────────────────────────────────────────────────────────
 function isMobile() { return window.matchMedia('(max-width: 768px)').matches }
+function isMedium() { return window.matchMedia('(min-width: 540px) and (max-width: 768px)').matches }
 
 function switchTab(tab) {
   activeTab = tab
@@ -472,6 +500,9 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.add('active')
   document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.remove('tab-active'))
   document.getElementById('panel-' + tab).classList.add('tab-active')
+  if (isMedium()) {
+    document.getElementById('app').classList.toggle('medium-projects-visible', tab === 'projects')
+  }
 }
 
 // ── init ───────────────────────────────────────────────────────────────────
@@ -481,7 +512,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('app').classList.add('unlocked-mode')
     document.getElementById('new-project-row').classList.add('visible')
   }
-  if (isMobile()) switchTab('projects')
+  if (isMedium()) switchTab('main')
+  else if (isMobile()) switchTab('projects')
 
   const notesEl = document.getElementById('panel-notes')
   document.addEventListener('mousedown', (e) => {
