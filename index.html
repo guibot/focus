@@ -275,8 +275,8 @@
     color: var(--text); caret-color: var(--accent);
     display: none;
   }
-  .unlocked-mode #notes-editor { display: block; }
-  .unlocked-mode #notes-preview { display: none; }
+  #panel-notes.notes-focused #notes-editor { display: block; }
+  #panel-notes.notes-focused #notes-preview { display: none; }
   #notes-editor::placeholder { color: var(--text3); }
   #notes-preview {
     width: 100%; display: block;
@@ -482,6 +482,21 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('new-project-row').classList.add('visible')
   }
   if (isMobile()) switchTab('projects')
+
+  const notesEl = document.getElementById('panel-notes')
+  document.addEventListener('mousedown', (e) => {
+    if (notesEl.contains(e.target)) {
+      notesEl.classList.add('notes-focused')
+    } else {
+      if (notesEl.classList.contains('notes-focused')) {
+        notesEl.classList.remove('notes-focused')
+        flushNotes()
+        const content = document.getElementById('notes-editor').value
+        renderNotesPreview(content)
+      }
+    }
+  })
+
   const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}))
   projectOrder = cfg.projectOrder || []
   await loadProjects(cfg.sel || null)
@@ -948,7 +963,7 @@ function updateNotesCtx() {
 function loadNotes() {
   const content = selectedPath ? currentNotes() : ''
   document.getElementById('notes-editor').value = content
-  if (!unlocked) renderNotesPreview(content)
+  renderNotesPreview(content)
   notesDirty = false
   setIndicator('')
   updateNotesCtx()
