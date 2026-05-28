@@ -486,7 +486,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   const notesEl = document.getElementById('panel-notes')
   document.addEventListener('mousedown', (e) => {
     if (notesEl.contains(e.target)) {
-      notesEl.classList.add('notes-focused')
+      const inPreview = e.target.closest('#notes-preview')
+      if (!inPreview) notesEl.classList.add('notes-focused')
     } else {
       if (notesEl.classList.contains('notes-focused')) {
         notesEl.classList.remove('notes-focused')
